@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# project
+received_files/
+logs/
+sample_files/*.bin
