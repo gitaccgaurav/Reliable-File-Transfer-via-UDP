@@ -183,6 +183,13 @@ def send_file(file_path, host, port, name=None,
         stats["duration_seconds"] = round(
             time.monotonic() - start_time, 3
         )
+        # fields the tests and Mininet scripts expect
+        stats["protocol"] = "stop-and-wait"
+        stats["retransmissions"] = stats["retries"]
+        stats["elapsed_s"] = stats["duration_seconds"]
+        stats["verdict"] = "PASS" if stats["success"] else "FAIL"
+        stats.setdefault("error", None)
+
 
         if stats_file:
             directory = os.path.dirname(stats_file)
