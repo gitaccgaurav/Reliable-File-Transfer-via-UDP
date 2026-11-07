@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Reliable-UDP file sender, D1 version: stop-and-wait ARQ."""
 
 import argparse
 import hashlib
@@ -6,6 +7,7 @@ import json
 import os
 import random
 import socket
+import sys
 import time
 
 import config
@@ -13,231 +15,210 @@ import protocol as P
 from notify import notify_controller
 
 
-def log(message, verbose=False):
-    if verbose:
-        print(message, flush=True)
+class TransferError(Exception):
+    pass
 
 
-def wait_for_packet(sock, expected_type, tid, expected_seq):
-    sock.settimeout(config.TIMEOUT)
-    start_time = time.monotonic()
-
-    while True:
-        remaining = config.TIMEOUT - (time.monotonic() - start_time)
-
-        if remaining <= 0:
-            return None
-
-        sock.settimeout(remaining)
-
-        try:
-            data, addr = sock.recvfrom(65535)
-        except socket.timeout:
-            return None
-
-        packet = P.unpack(data)
-
-        if packet is None:
-            continue
-
-        if packet.ptype != expected_type:
-            continue
-
-        if packet.tid != tid:
-            continue
-
-        if packet.seq != expected_seq:
-            continue
-
-        return packet
+def log(msg):
+    t = time.time()
+    print(
+        f"[{time.strftime('%H:%M:%S', time.localtime(t))}."
+        f"{int(t * 1000) % 1000:03d}] {msg}",
+        flush=True
+    )
 
 
-def send_reliably(sock, receiver, tid, ptype, seq, payload,
-                  stats, drop_rate, verbose):
-    retries = 0
+class Stats:
+    def __init__(self):
+        self.sent = self.retx = self.timeouts = self.sim_drops = 0
+        self.consecutive = 0
+        self.last_progress = time.time()
+        self.max_gap = 0.0
+        self.last_notify = 0.0
 
-    while True:
-        # Simulate packet loss for testing.
-        if random.random() < drop_rate:
-            log(
-                f"Simulated loss: {P.NAMES[ptype]} seq={seq}",
-                verbose
-            )
-        else:
-            sock.sendto(
-                P.pack(ptype, tid, seq, payload),
-                receiver
-            )
+    def progress(self):
+        now = time.time()
+        self.max_gap = max(self.max_gap, now - self.last_progress)
+        self.last_progress = now
+        self.consecutive = 0
 
-        stats["packets_sent"] += 1
 
-        packet = wait_for_packet(sock, P.ACK, tid, seq)
+class Ctx:
+    """Everything one transfer needs: socket, destination, ids, counters."""
 
-        if packet is not None:
-            return True
+    def __init__(self, sock, addr, tid, args):
+        self.sock, self.addr, self.tid, self.args = sock, addr, tid, args
+        self.stats = Stats()
 
-        if retries >= config.MAX_RETRIES:
-            return False
+    def transmit(self, ptype, seq, pkt, retx=False):
+        st = self.stats
+        st.sent += 1
+        st.retx += 1 if retx else 0
 
-        retries += 1
-        stats["retries"] += 1
+        if self.args.verbose or retx:
+            log(f"{P.NAMES[ptype]} seq={seq} "
+                f"{'RETRANSMIT' if retx else 'sent'}")
 
-        log(
-            f"Timeout: {P.NAMES[ptype]} seq={seq}, retry {retries}",
-            verbose
+        if random.random() < self.args.drop_rate:
+            st.sim_drops += 1
+            return
+
+        self.sock.sendto(pkt, self.addr)
+
+    def maybe_notify(self):
+        st, a = self.stats, self.args
+        now = time.time()
+
+        if (a.no_notify or st.consecutive < config.NOTIFY_AFTER
+                or now - st.last_notify < 3):
+            return
+
+        st.last_notify = now
+        sent = notify_controller(
+            "path_problem",
+            src=a.name,
+            dst_ip=self.addr[0],
+            timeouts=st.consecutive
         )
 
-        notify_controller(tid, seq, retries)
+        log(f"{st.consecutive} consecutive timeouts -> told SDN controller "
+            f"({'delivered' if sent else 'no controller listening'})")
 
 
-def send_file(file_path, host, port, name=None,
-              drop_rate=0.0, stats_file=None, verbose=False):
+def send_reliable(ctx, ptype, seq, payload, expect_type):
+    """Send one packet and wait for its matching reply."""
+    pkt = P.pack(ptype, ctx.tid, seq, payload)
 
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(file_path)
+    for attempt in range(config.MAX_RETRIES + 1):
+        ctx.transmit(ptype, seq, pkt, retx=attempt > 0)
+        deadline = time.time() + config.TIMEOUT
 
-    if not 0.0 <= drop_rate <= 1.0:
-        raise ValueError("--drop-rate must be between 0 and 1")
+        while True:
+            remaining = deadline - time.time()
 
-    with open(file_path, "rb") as file:
-        file_data = file.read()
+            if remaining <= 0:
+                break
 
-    chunks = P.split_file(file_data, config.CHUNK_SIZE)
-    digest = hashlib.sha256(file_data).digest()
-    tid = random.randint(1, 2**32 - 1)
-    receiver = (host, port)
+            ctx.sock.settimeout(remaining)
 
-    stats = {
-        "tid": tid,
-        "file": name or os.path.basename(file_path),
-        "bytes": len(file_data),
-        "packets_sent": 0,
-        "retries": 0,
-        "duration_seconds": 0,
-        "success": False
-    }
+            try:
+                data, _ = ctx.sock.recvfrom(2048)
+            except socket.timeout:
+                break
 
-    start_time = time.monotonic()
+            r = P.unpack(data)
+
+            if (r and r.ptype == expect_type
+                    and r.tid == ctx.tid and r.seq == seq):
+                ctx.stats.progress()
+                return r
+
+        ctx.stats.timeouts += 1
+        ctx.stats.consecutive += 1
+
+        log(f"TIMEOUT waiting for {P.NAMES[expect_type]} "
+            f"of seq={seq} (attempt {attempt + 1})")
+
+        ctx.maybe_notify()
+
+    raise TransferError(
+        f"gave up on {P.NAMES[ptype]} seq={seq} "
+        f"after {config.MAX_RETRIES} retries"
+    )
+
+
+def stop_and_wait(ctx, chunks):
+    for seq, chunk in enumerate(chunks):
+        send_reliable(ctx, P.DATA, seq, chunk, P.ACK)
+
+
+def build_parser(desc):
+    ap = argparse.ArgumentParser(description=desc)
+    ap.add_argument("file")
+    ap.add_argument("host", help="receiver IP address")
+    ap.add_argument("--port", type=int, default=config.PORT)
+    ap.add_argument("--name", default="sender",
+                    help="host label sent to the controller")
+    ap.add_argument("--drop-rate", type=float, default=0.0)
+    ap.add_argument("--no-notify", action="store_true")
+    ap.add_argument("--stats-file")
+    ap.add_argument("-v", "--verbose", action="store_true")
+    return ap
+
+
+def run(args, transfer_fn, label):
+    with open(args.file, "rb") as f:
+        data = f.read()
+
+    chunks = P.split_file(data, config.CHUNK_SIZE)
+    digest = hashlib.sha256(data).digest()
+    tid = random.getrandbits(32)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ctx = Ctx(sock, (args.host, args.port), tid, args)
+
+    verdict, error, t0 = "ERROR", None, time.time()
 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        body = P.pack_start(
+            len(data), len(chunks), digest,
+            os.path.basename(args.file)
+        )
 
-            start_payload = P.pack_start(
-                len(file_data),
-                len(chunks),
-                digest,
-                name or os.path.basename(file_path)
-            )
+        send_reliable(ctx, P.START, 0, body, P.ACK)
 
-            if not send_reliably(
-                sock, receiver, tid, P.START, 0,
-                start_payload, stats, drop_rate, verbose
-            ):
-                raise TimeoutError("No ACK received for START")
+        log(f"transfer {tid}: {len(data)} bytes in {len(chunks)} chunks, "
+            f"sha256={digest.hex()[:16]}...")
 
-            for seq, chunk in enumerate(chunks):
-                if not send_reliably(
-                    sock, receiver, tid, P.DATA, seq,
-                    chunk, stats, drop_rate, verbose
-                ):
-                    raise TimeoutError(
-                        f"No ACK received for DATA seq={seq}"
-                    )
+        transfer_fn(ctx, chunks)
 
-            retries = 0
+        verdict = send_reliable(
+            ctx, P.FIN, 0, b"", P.FIN_ACK
+        ).payload.decode()
 
-            while True:
-                if random.random() < drop_rate:
-                    log("Simulated loss: FIN", verbose)
-                else:
-                    sock.sendto(P.pack(P.FIN, tid, 0), receiver)
-
-                stats["packets_sent"] += 1
-
-                packet = wait_for_packet(
-                    sock, P.FIN_ACK, tid, 0
-                )
-
-                if packet is not None:
-                    if packet.payload != b"PASS":
-                        raise RuntimeError(
-                            "Receiver reported integrity failure"
-                        )
-
-                    stats["success"] = True
-                    break
-
-                if retries >= config.MAX_RETRIES:
-                    raise TimeoutError("No FIN_ACK received")
-
-                retries += 1
-                stats["retries"] += 1
-
-                log(f"Timeout: FIN, retry {retries}", verbose)
-                notify_controller(tid, 0, retries)
-
-    except Exception as error:
-        stats["error"] = str(error)
+    except TransferError as e:
+        error = str(e)
+        log(f"TRANSFER FAILED: {error}")
 
     finally:
-        stats["duration_seconds"] = round(
-            time.monotonic() - start_time, 3
-        )
-        # fields the tests and Mininet scripts expect
-        stats["protocol"] = "stop-and-wait"
-        stats["retransmissions"] = stats["retries"]
-        stats["elapsed_s"] = stats["duration_seconds"]
-        stats["verdict"] = "PASS" if stats["success"] else "FAIL"
-        stats.setdefault("error", None)
+        sock.close()
 
+    elapsed = time.time() - t0
+    st = ctx.stats
 
-        if stats_file:
-            directory = os.path.dirname(stats_file)
-            if directory:
-                os.makedirs(directory, exist_ok=True)
+    result = {
+        "protocol": label,
+        "tid": tid,
+        "file": os.path.basename(args.file),
+        "bytes": len(data),
+        "chunks": len(chunks),
+        "elapsed_s": round(elapsed, 3),
+        "throughput_kBps": round(
+            len(data) / 1000 / elapsed, 1
+        ) if elapsed else 0,
+        "packets_sent": st.sent,
+        "retransmissions": st.retx,
+        "timeouts": st.timeouts,
+        "max_ack_gap_s": round(st.max_gap, 3),
+        "verdict": verdict,
+        "error": error
+    }
 
-            with open(stats_file, "a") as file:
-                file.write(json.dumps(stats) + "\n")
+    log(f"RESULT receiver integrity check: {verdict}")
+    print(json.dumps(result), flush=True)
 
-        print(json.dumps(stats), flush=True)
+    if args.stats_file:
+        with open(args.stats_file, "a") as f:
+            f.write(json.dumps(result) + "\n")
 
-    return stats["success"]
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Reliable UDP file sender"
-    )
-
-    parser.add_argument("file")
-    parser.add_argument("host")
-    parser.add_argument("--port", type=int, default=config.PORT)
-    parser.add_argument("--name", default=None)
-    parser.add_argument("--drop-rate", type=float, default=0.0)
-    parser.add_argument("--no-notify", action="store_true")
-    parser.add_argument("--stats-file", default=None)
-    parser.add_argument("-v", "--verbose", action="store_true")
-
-    args = parser.parse_args()
-
-    if args.no_notify:
-        global notify_controller
-        notify_controller = lambda tid, seq, retries: False
-
-    success = send_file(
-        args.file,
-        args.host,
-        args.port,
-        args.name,
-        args.drop_rate,
-        args.stats_file,
-        args.verbose
-    )
-
-    if not success:
-        raise SystemExit(1)
+    return 0 if verdict == "PASS" else 1
 
 
 if __name__ == "__main__":
-    main()
-
+    sys.exit(
+        run(
+            build_parser("Reliable UDP sender (stop-and-wait)").parse_args(),
+            stop_and_wait,
+            "stop-and-wait"
+        )
+    )

@@ -1,30 +1,18 @@
-import socket
+"""Application -> SDN controller channel."""
+
 import json
+import socket
+import config
 
-from config import NOTIFY_SOCK, NOTIFY_AFTER
 
-
-def notify_controller(tid, seq, retries):
-    if retries < NOTIFY_AFTER:
-        return False
-
-    message = {
-        "tid": tid,
-        "seq": seq,
-        "retries": retries
-    }
-
-    client = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+def notify_controller(event, **info):
+    """Fire-and-forget. Returns False if no controller is listening."""
+    msg = json.dumps({"event": event, **info}).encode()
 
     try:
-        client.sendto(
-            json.dumps(message).encode(),
-            NOTIFY_SOCK
-        )
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        s.sendto(msg, config.NOTIFY_SOCK)
+        s.close()
         return True
-
     except OSError:
         return False
-
-    finally:
-        client.close()
