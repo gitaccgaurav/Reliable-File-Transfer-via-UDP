@@ -101,33 +101,42 @@ and moves it back when the link returns.
 
 ### Three layers
 
-```mermaid
-flowchart TB
-    subgraph APP["🐍 APPLICATION: fixes LOST DATA"]
-        S["sender.py / sender_sr.py"] <--> R["receiver.py"]
-    end
-    subgraph NET["🌐 NETWORK: carries or drops packets"]
-        H["Mininet hosts h1 h2 h3"] --- SW["Open vSwitch s1..s4"]
-    end
-    subgraph CTL["🧠 CONTROL: fixes BROKEN PATHS"]
-        RY["Ryu: controller_d1.py or controller.py"]
-    end
-    APP -- "UDP datagrams, port 5005" --> NET
-    CTL -- "OpenFlow 1.3, TCP 6653" --> NET
-    S -. "app reports via Unix socket (D2)" .-> RY
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│ APPLICATION   sender.py / sender_sr.py  <->  receiver.py             │
+│ Fixes LOST DATA: sequence numbers, ACKs, retransmission,             │
+│ duplicate/gap detection, CRC32 per packet, SHA-256 per file          │
+└──────────────────────────────────────────────────────────────────────┘
+                                     │  UDP datagrams, port 5005
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│ NETWORK       Mininet hosts h1, h2, h3  +  Open vSwitch s1..s4       │
+│ Carries or drops packets; makes no routing decisions                 │
+└──────────────────────────────────────────────────────────────────────┘
+                                     ▲
+                                     │  OpenFlow 1.3 over TCP 6653
+┌──────────────────────────────────────────────────────────────────────┐
+│ CONTROL       Ryu: controller_d1.py (D1)  or  controller.py (D2)     │
+│ Fixes BROKEN PATHS: flow rules, port events, reroutes                │
+└──────────────────────────────────────────────────────────────────────┘
+
+   Side channel (D2 only): sender -> Unix socket /tmp/sdn_notify.sock -> controller
 ```
 
 ### Network topology
 
-```mermaid
-flowchart LR
-    h1["h1 10.0.0.1<br/>sender"] --- s1
-    h3["h3 10.0.0.3<br/>sender"] --- s1
-    s1 == "2 ms primary" ==> s2
-    s2 == "2 ms primary" ==> s4
-    s1 -. "10 ms backup" .- s3
-    s3 -. "10 ms backup" .- s4
-    s4 --- h2["h2 10.0.0.2<br/>receiver"]
+```text
+                          ┌────── s2 ──────┐
+                          │  2 ms    2 ms  │      PRIMARY   s1 - s2 - s4
+                          │                │      cost 1+1, RTT about 12 ms
+ h1 10.0.0.1 ─┐           │                │      used while healthy
+              ├── s1 ─────┤                ├───── s4 ──── h2 10.0.0.2
+ h3 10.0.0.3 ─┘           │                │                (receiver)
+                          │ 10 ms    10 ms │      BACKUP    s1 - s3 - s4
+                          │                │      cost 5+5, RTT about 44 ms
+                          └┄┄┄┄┄┄ s3 ┄┄┄┄┄┄┘      used after the primary fails
+
+ ───  primary route        ┄┄┄  backup route        (host links: 1 ms each)
 ```
 
 | Route | Path | Cost | One-way core delay | Approx. h1→h2 RTT | Used when |
@@ -180,14 +189,35 @@ Loss (with `--loss`) is applied only to the two links leaving s1, so each route 
 
 ### Controller event flow (D2)
 
-```mermaid
-flowchart TD
-    A["Switch port goes down"] --> B["EventOFPPortStatus"] --> C["down_ports.add"]
-    X["Sender: path_problem report"] --> Y["_notify_loop: suspect link for 15 s"]
-    C --> D["routing.next_hops: Dijkstra without failed links"]
-    Y --> D
-    D --> E["install_flows on every switch<br/>same match, new output port"]
-    E --> F["REROUTE logged + controller_events.csv row"]
+```text
+┌────────────────────────────────────┐    ┌────────────────────────────────────┐
+│ Switch port goes down              │    │ Sender reports path_problem        │
+│ EventOFPPortStatus event           │    │ after 5 consecutive timeouts       │
+└────────────────────────────────────┘    └────────────────────────────────────┘
+                   │                                         │
+                   ▼                                         ▼
+┌────────────────────────────────────┐    ┌────────────────────────────────────┐
+│ down_ports.add(s1, port 2)         │    │ _notify_loop: suspect link         │
+└────────────────────────────────────┘    │ for 15 s (5 s cooldown)            │
+                                          └────────────────────────────────────┘
+                   │                                         │
+                   └────────────────────┬────────────────────┘
+                                        ▼
+         ┌────────────────────────────────────────────────────────────┐
+         │ routing.next_hops(down_links)                              │
+         │ Dijkstra shortest path with failed links removed           │
+         └────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+         ┌────────────────────────────────────────────────────────────┐
+         │ install_flows(dp) on every switch                          │
+         │ same match, new output port (overwrites the old rule)      │
+         └────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+         ┌────────────────────────────────────────────────────────────┐
+         │ REROUTE logged + row added to controller_events.csv        │
+         └────────────────────────────────────────────────────────────┘
 ```
 
 > **Why rules are replaced, not deleted:** an OpenFlow ADD with the same match and priority overwrites the old entry,
@@ -239,27 +269,26 @@ below the 1500-byte MTU, so IP never fragments.
 
 ### Transfer sequence (stop-and-wait, one chunk and one ACK lost)
 
-```mermaid
-sequenceDiagram
-    participant S as Sender (h1)
-    participant R as Receiver (h2)
-    S->>R: START (size, chunks, SHA-256, name)
-    R-->>S: ACK 0
-    S->>R: DATA seq=0
-    R-->>S: ACK 0
-    S-xR: DATA seq=1 (lost)
-    Note over S: 0.5 s timeout
-    S->>R: DATA seq=1 (RETRANSMIT)
-    R-->>S: ACK 1
-    S->>R: DATA seq=2
-    R--xS: ACK 2 (lost)
-    Note over S: 0.5 s timeout
-    S->>R: DATA seq=2 (RETRANSMIT)
-    Note over R: DUP: ignored, re-ACKed
-    R-->>S: ACK 2
-    S->>R: FIN
-    Note over R: all present? write file, check SHA-256
-    R-->>S: FIN_ACK "PASS"
+```text
+     Sender (h1)                                    Receiver (h2)
+          │                                               │
+          │────── START (size, chunks, SHA-256, name) ───▶│   session created
+          │◀──────────────────── ACK 0 ───────────────────│
+          │────────────────── DATA seq=0 ────────────────▶│   stored
+          │◀──────────────────── ACK 0 ───────────────────│
+          │────────────────── DATA seq=1 ────X            │   lost on the way
+          │              ... 0.5 s timeout ...            │
+          │─────────── DATA seq=1  (RETRANSMIT) ─────────▶│   stored
+          │◀──────────────────── ACK 1 ───────────────────│
+          │────────────────── DATA seq=2 ────────────────▶│   stored
+          │            X──────── ACK 2 ───────────────────│   ACK lost on the way
+          │              ... 0.5 s timeout ...            │
+          │─────────── DATA seq=2  (RETRANSMIT) ─────────▶│   DUP: ignored, not written twice
+          │◀──────────────────── ACK 2 ───────────────────│   re-ACKed
+          │            ... remaining chunks ...           │
+          │────────────────────── FIN ───────────────────▶│   all chunks present? write file, check SHA-256
+          │◀─────────────── FIN_ACK  "PASS" ──────────────│
+          │                                               │
 ```
 
 ### Sender algorithms
