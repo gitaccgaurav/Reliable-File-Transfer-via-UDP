@@ -761,11 +761,6 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 
 ---
 
-## Results
-
-> [!NOTE]
-> Fill this section **only with numbers you measured** by running UC11. Loss is random, so report mean ± standard deviation over several trials.
-> Expect the *pattern* to reproduce (more loss → more retransmissions; dynamic beats static on stall time; Selective Repeat beats stop-and-wait under loss), not identical numbers.
 
 ### Graphs
 
@@ -797,14 +792,6 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 | Dynamic (`--tag sdn`) | stop-and-wait | _fill_ | _fill_ | PASS |
 | Static (`--tag static`) | stop-and-wait | _fill_ | _fill_ | PASS |
 
-### Test environment (report this with your results)
-
-| Item | Value |
-|---|---|
-| CPU / RAM | _fill_ |
-| Ubuntu version | _fill_ (`lsb_release -a`) |
-| Python / Ryu | _fill_ (`python --version`, `pip show ryu`) |
-| Mininet | _fill_ (`dpkg -l mininet`) |
 
 ---
 
@@ -942,25 +929,6 @@ python3 -m unittest tests.test_loopback -v    # UDP transfers on localhost (8)
 - **Single controller, single machine.** The app → controller channel needs both on one machine.
 - **Transfer-id collisions** are possible in principle (random 32-bit id).
 
----
-
-## Verification Status
-
-> Be exact about what has been tested and where. Update the last column as you complete each run.
-
-| Area | How it was tested | Status |
-|---|---|---|
-| Packet format, CRC, START body | 7 unit tests | ✅ passing |
-| Routing and failover logic | 7 unit tests | ✅ passing |
-| Protocol over real UDP (loss, lost ACKs, empty file, two senders) | 8 loopback tests | ✅ passing |
-| Controller under real Ryu 4.x (Python 3.9, eventlet 0.30.2), four simulated switches | scripted handshake, rules, failover, recovery, app report, stats CSV | ✅ passing |
-| Mininet topology, `pingall`, flow tables | run on Ubuntu VM by the team | ✅ passing |
-| Link failure detected by OVS under Mininet (UC7) | _to confirm_ | ⬜ update after running |
-| `run_demo.py` / `run_experiments.py` inside Mininet (UC6, UC11) | _to confirm_ | ⬜ update after running |
-| Silent failure with real blackhole rule (UC8) | _to confirm_ | ⬜ update after running |
-| Measured throughput and failover numbers | see [Results](#results) | ⬜ fill from your runs |
-
----
 
 ## Team and Contributions
 
