@@ -170,7 +170,7 @@ Loss (with `--loss`) is applied only to the two links leaving s1, so each route 
 
 <!-- ADD: your own topology screenshot (e.g. output of `net` / `links` in the Mininet CLI) -->
 <p align="center">
-  <img src="https://placehold.co/900x350/e5e7eb/111827?text=SCREENSHOT+1:+Mininet+topology+(net+/+links+output)" width="80%" alt="Topology screenshot"/>
+  <img src="docs/screenshots/01_topology.png" width="380"/>
   <br/><sub>📸 <b>Figure 1.</b> Mininet topology as built by <code>sdn/topology.py</code>.</sub>
 </p>
 
@@ -483,7 +483,7 @@ head -c 300000  /dev/urandom > sample_files/300KB.bin
 
 <!-- ADD: screenshot of the passing test run -->
 <p align="center">
-  <img src="https://placehold.co/900x300/e5e7eb/111827?text=SCREENSHOT+2:+python3+-m+unittest+discover+tests+(22+OK)" width="75%" alt="Tests passing"/>
+  <img src="docs/screenshots/02_tests.png" width="380"/>
   <br/><sub>📸 <b>Figure 2.</b> All 22 tests passing.</sub>
 </p>
 
@@ -528,7 +528,7 @@ mininet> sh sha256sum sample_files/300KB.bin received_files/*_300KB.bin
 <!-- ADD: screenshots of T1 (controller connected) and T2 (pingall + transfer PASS) -->
 | T1: controller | T2: Mininet transfer |
 |:--:|:--:|
-| <img src="https://placehold.co/450x260/e5e7eb/111827?text=SCREENSHOT+3a:+Ryu+SWITCH_CONNECTED+s1..s4" width="100%"/> | <img src="https://placehold.co/450x260/e5e7eb/111827?text=SCREENSHOT+3b:+pingall+and+PASS+verdict" width="100%"/> |
+| <img src="docs/screenshots/03a_controller.png" width="100%"/> | <img src="docs/screenshots/03b_transfer.png" width="100%"/> |
 
 **Shut down:** `exit` in T2, `Ctrl+C` in T1, then `sudo mn -c`.
 
@@ -736,25 +736,25 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 
 | # | What to capture | Suggested file | Preview |
 |---|---|---|---|
-| 4 | `dump-flows s1` showing rules for 10.0.0.1/.2/.3 | `04_flows_s1.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+04_flows_s1.png" width="380"/> |
+| 4 | `dump-flows s1` showing rules for 10.0.0.1/.2/.3 | `04_flows_s1.png` | <img src="docs/screenshots/04_flows_s1.png" width="380"/> |
 | 5 | D1 transfer: sender log ending in `"verdict": "PASS"` | `05_d1_pass.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+05_d1_pass.png" width="380"/> |
-| 6 | `sha256sum` of original and received (identical) | `06_hash_match.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+06_hash_match.png" width="380"/> |
-| 7 | 5 % loss run: `TIMEOUT` / `RETRANSMIT` lines and `PASS` | `07_loss_retransmit.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+07_loss_retransmit.png" width="380"/> |
-| 8 | Receiver log with `DUP ... re-ACK` and `GAP` lines | `08_receiver_dup_gap.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+08_receiver_dup_gap.png" width="380"/> |
-| 9 | Wireshark / tshark capture on `udp.port == 5005` | `09_wireshark_udp.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+09_wireshark_udp.png" width="380"/> |
+| 6 | `sha256sum` of original and received (identical) | `06_hash_match.png` | <img src="docs/screenshots/06_hash_match.png" width="380"/> |
+| 7 | 5 % loss run: `TIMEOUT` / `RETRANSMIT` lines and `PASS` | `07_loss_retransmit.png` | <img src="docs/screenshots/07_loss_retransmit.png" width="380"/> |
+| 8 | Receiver log with `DUP ... re-ACK` and `GAP` lines | `08_receiver_dup_gap.png` | <img src="docs/screenshots/08_receiver_dup_gap.png" width="380"/> |
+| 9 | Wireshark / tshark capture on `udp.port == 5005` | `09_wireshark_udp.png` | <img src="docs/screenshots/09_wireshark_udp.png" width="380"/> |
 
 ### D2: dynamic SDN
 
 | # | What to capture | Suggested file | Preview |
 |---|---|---|---|
 | 10 | Flow table **before** failure (10.0.0.2 → `s1-eth2`) | `10_flow_before.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+10_flow_before.png" width="380"/> |
-| 11 | T1 controller: `LINK_DOWN` + `REROUTE ... s1-s3-s4` | `11_controller_reroute.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+11_controller_reroute.png" width="380"/> |
+| 11 | T1 controller: `LINK_DOWN` + `REROUTE ... s1-s3-s4` | `11_controller_reroute.png` | <img src="docs/screenshots/11_controller_reroute.png" width="380"/> |
 | 12 | Flow table **during** failure (10.0.0.2 → `s1-eth3`) | `12_flow_during.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+12_flow_during.png" width="380"/> |
 | 13 | tshark on `s1-eth3` showing packets on the backup route | `13_backup_capture.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+13_backup_capture.png" width="380"/> |
 | 14 | Recovery: `LINK_UP` + `REROUTE ... s1-s2-s4` | `14_recovery.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+14_recovery.png" width="380"/> |
 | 15 | Silent failure: `APP_REPORT` with no `LINK_DOWN` | `15_silent_failure.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+15_silent_failure.png" width="380"/> |
 | 16 | Two senders at once: interleaved receiver log | `16_multi_sender.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+16_multi_sender.png" width="380"/> |
-| 17 | `logs/controller_events.csv` with timestamps | `17_events_csv.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+17_events_csv.png" width="380"/> |
+| 17 | `logs/controller_events.csv` with timestamps | `17_events_csv.png` | <img src="docs/screenshots/17_events_csv.png" width="380"/> |
 
 <!-- OPTIONAL: record a screen GIF of UC7 (T1 + T2 side by side) and add:
 <p align="center"><img src="docs/images/failover.gif" width="85%" alt="Failover demo"/></p> -->
