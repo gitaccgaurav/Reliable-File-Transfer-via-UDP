@@ -994,9 +994,9 @@ python3 -m unittest tests.test_loopback -v    # UDP transfers on localhost (8)
 
 | Member | GitHub | Owns |
 |----|---|---|
-| Jahnvi Nagpal | [@jahnvinagpal-11](https://github.com/jahnvinagpal-11) | `sender.py`, `sender_sr.py`, `notify.py`, `scripts/harness.py`, `scripts/run_demo.py` |
-| Gaurav Naik    | [@gitaccgaurav](https://github.com/gitaccgaurav) | `receiver.py`, `config.py`, `protocol.py`, `scripts/run_experiments.py`, `scripts/plot_results.py`, `tests/test_loopback.py`, `tests/test_protocol.py` |
-| Yashwanth Sai  | [@Yashwanth-sai-code_](https://github.com/Yashwanth-sai-code) | `sdn/` (all files), `tests/test_routing.py` |
+| Jahnvi Nagpal | [@jahnvinagpal-11](https://github.com/jahnvinagpal-11) | `sender.py`, `protocol.py`, `sender_sr.py`, `notify.py`, `scripts/harness.py`, `scripts/run_demo.py` `tests/test_protocol.py`|
+| Gaurav Naik    | [@gitaccgaurav](https://github.com/gitaccgaurav) | `receiver.py`, `config.py`, `scripts/run_experiments.py`, `scripts/plot_results.py`, `tests/test_loopback.py`,`tests/test_routing.py`  |
+| Yashwanth Sai  | [@Yashwanth-sai-code_](https://github.com/Yashwanth-sai-code) | `sdn/` (all files), |
 
 <details>
 <summary><b>Git workflow</b></summary>
@@ -1030,6 +1030,6 @@ Use a branch for any change to a shared interface (`protocol.py`, `config.py`, `
 
 <div align="center">
 
-**⭐ If this project helped you, consider giving the repo a star.**
+**Thank You for Reading. Don't forget give this repo a star ⭐️**
 
 </div>
