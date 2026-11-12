@@ -737,7 +737,7 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 | # | What to capture | Suggested file | Preview |
 |---|---|---|---|
 | 4 | `dump-flows s1` showing rules for 10.0.0.1/.2/.3 | `04_flows_s1.png` | <img src="docs/screenshots/04_flows_s1.png" width="380"/> |
-| 5 | D1 transfer: sender log ending in `"verdict": "PASS"` | `05_d1_pass.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+05_d1_pass.png" width="380"/> |
+| 5 | D1 transfer: sender log ending in `"verdict": "PASS"` | `05_d1_pass.png` | <img src="docs/screenshots/05_d1_pass.png" width="380"/> |
 | 6 | `sha256sum` of original and received (identical) | `06_hash_match.png` | <img src="docs/screenshots/06_hash_match.png" width="380"/> |
 | 7 | 5 % loss run: `TIMEOUT` / `RETRANSMIT` lines and `PASS` | `07_loss_retransmit.png` | <img src="docs/screenshots/07_loss_retransmit.png" width="380"/> |
 | 8 | Receiver log with `DUP ... re-ACK` and `GAP` lines | `08_receiver_dup_gap.png` | <img src="docs/screenshots/08_receiver_dup_gap.png" width="380"/> |
@@ -747,13 +747,13 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 
 | # | What to capture | Suggested file | Preview |
 |---|---|---|---|
-| 10 | Flow table **before** failure (10.0.0.2 → `s1-eth2`) | `10_flow_before.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+10_flow_before.png" width="380"/> |
+| 10 | Flow table **before** failure (10.0.0.2 → `s1-eth2`) | `10_flow_before.png` | <img src="docs/screenshots/10_flow_before.png" width="380"/> |
 | 11 | T1 controller: `LINK_DOWN` + `REROUTE ... s1-s3-s4` | `11_controller_reroute.png` | <img src="docs/screenshots/11_controller_reroute.png" width="380"/> |
-| 12 | Flow table **during** failure (10.0.0.2 → `s1-eth3`) | `12_flow_during.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+12_flow_during.png" width="380"/> |
-| 13 | tshark on `s1-eth3` showing packets on the backup route | `13_backup_capture.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+13_backup_capture.png" width="380"/> |
-| 14 | Recovery: `LINK_UP` + `REROUTE ... s1-s2-s4` | `14_recovery.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+14_recovery.png" width="380"/> |
-| 15 | Silent failure: `APP_REPORT` with no `LINK_DOWN` | `15_silent_failure.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+15_silent_failure.png" width="380"/> |
-| 16 | Two senders at once: interleaved receiver log | `16_multi_sender.png` | <img src="https://placehold.co/380x200/e5e7eb/111827?text=ADD+16_multi_sender.png" width="380"/> |
+| 12 | Flow table **during** failure (10.0.0.2 → `s1-eth3`) | `12_flow_during.png` | <img src="docs/screenshots/12_flow_during.png" width="380"/> |
+| 13 | tshark on `s1-eth3` showing packets on the backup route | `13_backup_capture.png` | <img src="docs/screenshots/13_backup_capture.png" width="380"/> |
+| 14 | Recovery: `LINK_UP` + `REROUTE ... s1-s2-s4` | `14_recovery.png` | <img src="docs/screenshots/14_recovery.png" width="380"/> |
+| 15 | Silent failure: `APP_REPORT` with no `LINK_DOWN` | `15_silent_failure.png` | <img src="docs/screenshots/15_silent_failure.png" width="380"/> |
+| 16 | Two senders at once: interleaved receiver log | `16_multi_sender.png` | <img src="docs/screenshots/16_multi_sender.png" width="380"/> |
 | 17 | `logs/controller_events.csv` with timestamps | `17_events_csv.png` | <img src="docs/screenshots/17_events_csv.png" width="380"/> |
 
 <!-- OPTIONAL: record a screen GIF of UC7 (T1 + T2 side by side) and add:
