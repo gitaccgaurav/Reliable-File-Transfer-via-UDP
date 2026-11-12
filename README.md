@@ -44,9 +44,8 @@
 17. [Reproducing on Another Machine](#reproducing-on-another-machine)
 18. [Troubleshooting](#troubleshooting)
 19. [Limitations](#limitations)
-20. [Verification Status](#verification-status)
-21. [Team and Contributions](#team-and-contributions)
-22. [Acknowledgements](#acknowledgements)
+20. [Team and Contributions](#team-and-contributions)
+21. [Acknowledgements](#acknowledgements)
 
 ---
 
@@ -664,13 +663,13 @@ python3 scripts/plot_results.py
 | [UC2](#uc2-transfer-on-localhost-no-mininet-no-ryu) | Localhost transfer | Python only | `PASS`, hashes match |
 | [UC3](#uc3-prove-loss-is-recovered-localhost) | Packet loss recovery | Python only | retransmissions > 0, `PASS` |
 | [UC4](#uc4-prove-duplicates-are-detected-lost-acks) | Duplicate detection | Python only | `DUP ... re-ACK` in receiver log |
-| UC5 | D1 normal transfer in Mininet | Ryu + Mininet | `PASS`, hashes match |
-| UC6 | D1 with 5 % loss | Ryu + Mininet | `PASS`, retransmissions > 0 |
+| [UC5](#uc5-d1-transfer-inside-mininet-normal) | D1 normal transfer in Mininet | Ryu + Mininet | `PASS`, hashes match |
+| [UC6](#uc6-d1-transfer-with-packet-loss) | D1 with 5 % loss | Ryu + Mininet | `PASS`, retransmissions > 0 |
 | [UC7](#uc7-link-failure-during-a-transfer-d2) | Link failure + reroute | Ryu D2 + Mininet | reroute between link events, `PASS` |
-| UC8 | Silent failure | Ryu D2 + Mininet | `APP_REPORT`, no `LINK_DOWN` |
-| UC9 | Several senders | Ryu + Mininet | two interleaved ids, two `PASS` |
-| UC10 | Static baseline | Ryu `REROUTE=0` | stall until link returns |
-| UC11 | Full measurement campaign | all | CSV rows + 2 PNG graphs |
+| [UC8](#uc8-silent-failure-application-warns-the-controller) | Silent failure | Ryu D2 + Mininet | `APP_REPORT`, no `LINK_DOWN` |
+| [UC9](#uc9-several-senders-at-once) | Several senders | Ryu + Mininet | two interleaved ids, two `PASS` |
+| [UC10](#uc10-static-baseline-no-rerouting) | Static baseline | Ryu `REROUTE=0` | stall until link returns |
+| [UC11](#uc11-full-measurement-campaign) | Full measurement campaign | all | CSV rows + 2 PNG graphs |
 
 #### UC1: verify the code
 ```bash
@@ -695,6 +694,28 @@ python3 sender.py sample_files/300KB.bin 127.0.0.1 --port 5111 --drop-rate 0.2
 python3 receiver.py --bind 127.0.0.1 --port 5111 --drop-ack 0.3 -v &
 python3 sender.py sample_files/300KB.bin 127.0.0.1 --port 5111
 ```
+
+#### UC5: D1 transfer inside Mininet (normal)
+```bash
+# T1: ryu-manager sdn/controller_d1.py     (wait until it is quiet)
+# T2:
+sudo python3 sdn/topology.py
+```
+```
+mininet> pingall
+mininet> h2 python3 receiver.py &
+mininet> h1 python3 sender.py sample_files/300KB.bin 10.0.0.2 --name h1
+mininet> sh sha256sum sample_files/300KB.bin received_files/*_300KB.bin
+```
+**Expect:** the sender's last line has `"verdict": "PASS"` and the two hashes are identical.
+
+#### UC6: D1 transfer with packet loss
+Start Ryu with `controller_d1.py` in T1, make sure no network is running, then:
+```bash
+sudo mn -c        # only when Ryu is NOT running
+sudo python3 scripts/run_demo.py sample_files/300KB.bin --sender sw --loss 5
+```
+**Expect:** `TIMEOUT` and `RETRANSMIT` lines, `"verdict": "PASS"`, and `"retransmissions"` above zero in the result JSON.
 
 #### UC7: link failure during a transfer (D2)
 The headline demo. Use a slow link and a big file.
@@ -725,12 +746,50 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 ```
 **Expect:** sender prints `5 consecutive timeouts -> told SDN controller (delivered)`; T1 shows `APP_REPORT` and `REROUTE ... avoiding s1-s2`, with **no** `LINK_DOWN`.
 
+#### UC9: several senders at once
+Run with Ryu and `sudo python3 sdn/topology.py` already started. Mininet does not show output from background (`&`) jobs, so each program writes to a log file:
+```
+mininet> h2 python3 -u receiver.py -v > /tmp/rx.log 2>&1 &
+mininet> h1 python3 -u sender_sr.py sample_files/2000KB.bin 10.0.0.2 --name h1 > /tmp/h1.log 2>&1 &
+mininet> h3 python3 -u sender.py sample_files/300KB.bin 10.0.0.2 --name h3 > /tmp/h3.log 2>&1 &
+```
+Wait about 20 seconds, then read the receiver log:
+```
+mininet> sh grep -E "START|GAP|DUP|INTEGRITY" /tmp/rx.log
+```
+**Expect:** two different transfer ids and two `INTEGRITY: PASS` lines. Compare each received file with its original using `sha256sum`.
+
+#### UC10: static baseline (no rerouting)
+The same failure as UC7, but with a controller that never changes routes:
+1. In T1, stop Ryu with `Ctrl+C`, then start it with `REROUTE=0 ryu-manager sdn/controller.py`.
+2. Repeat the UC7 steps, or run `sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --fail-at 3 --recover-at 8`.
+
+**Expect:** the transfer stalls for as long as the link is down and resumes only when it returns. Compare `max_ack_gap_s` in the result JSON with the dynamic run. Your numbers may differ, so measure them.
+
+#### UC11: full measurement campaign
+Each command runs for several minutes. Restart Ryu between the two failure runs.
+```bash
+# 1. loss suite (any controller)
+sudo mn -c
+sudo python3 scripts/run_experiments.py --suite loss --trials 3
+
+# 2. failure suite, dynamic controller
+#    T1: ryu-manager sdn/controller.py
+sudo python3 scripts/run_experiments.py --suite failure --tag sdn --trials 3
+
+# 3. failure suite, static baseline
+#    T1: Ctrl+C, then REROUTE=0 ryu-manager sdn/controller.py
+sudo python3 scripts/run_experiments.py --suite failure --tag static --trials 3
+
+# 4. graphs
+python3 scripts/plot_results.py
+```
+Run `sudo mn -c` only while Ryu is stopped. **Expect:** `results/experiments.csv` has rows for each suite, every row shows `harness_verified` `True`, and two PNG files appear in `results/`.
+
 ---
 
 ## Demo Gallery
 
-> **Where to add your screenshots:** save images into `docs/screenshots/` using the file names below, then replace each
-> `placehold.co` URL with the local path (e.g. `docs/screenshots/04_flow_before.png`). Commit the images.
 
 ### D1: basic system
 
@@ -761,6 +820,7 @@ sudo python3 scripts/run_demo.py sample_files/2000KB.bin --sender sr --bw 2 --bl
 
 ---
 
+## Results
 
 ### Graphs
 
