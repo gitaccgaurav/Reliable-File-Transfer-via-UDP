@@ -827,30 +827,30 @@ Run `sudo mn -c` only while Ryu is stopped. **Expect:** `results/experiments.csv
 <!-- After running `python3 scripts/plot_results.py`, replace each placehold.co URL below with results/loss_comparison.png and results/failure_comparison.png -->
 | Loss comparison | Failure comparison |
 |:--:|:--:|
-| <img src="https://placehold.co/450x300/e5e7eb/111827?text=ADD+results/loss_comparison.png" width="100%" alt="Loss comparison"/> | <img src="https://placehold.co/450x300/e5e7eb/111827?text=ADD+results/failure_comparison.png" width="100%" alt="Failure comparison"/> |
+| <img src="docs/screenshots/loss_comparison.png" width="100%" alt="Loss comparison"/> | <img src="docs/screenshots/failure_comparison.png" width="100%" alt="Failure comparison"/> |
 | throughput, retransmissions and time vs. loss | longest stall and total time, dynamic vs static |
 
 ### Loss experiment (300 KB, 5 Mbit, N trials)
 
 | Loss % | Sender | Throughput (kB/s) | Retransmissions | Time (s) | Verdict |
 |---:|---|---:|---:|---:|:--:|
-| 0 | stop-and-wait | _fill_ | _fill_ | _fill_ | PASS |
-| 0 | Selective Repeat | _fill_ | _fill_ | _fill_ | PASS |
-| 2 | stop-and-wait | _fill_ | _fill_ | _fill_ | PASS |
-| 2 | Selective Repeat | _fill_ | _fill_ | _fill_ | PASS |
-| 5 | stop-and-wait | _fill_ | _fill_ | _fill_ | PASS |
-| 5 | Selective Repeat | _fill_ | _fill_ | _fill_ | PASS |
-| 10 | stop-and-wait | _fill_ | _fill_ | _fill_ | PASS |
-| 10 | Selective Repeat | _fill_ | _fill_ | _fill_ | PASS |
+| 0 | stop-and-wait | 50.3 | 0 | 5.97 | PASS |
+| 0 | Selective Repeat | 531.0 | 0 | 0.56 | PASS |
+| 2 | stop-and-wait | 24.9 | 12 | 12.14 | PASS |
+| 2 | Selective Repeat | 128.9 | 16 | 2.33 | PASS |
+| 5 | stop-and-wait | 13.4 | 33 | 22.64 | PASS |
+| 5 | Selective Repeat | 56.1 | 31 | 6.16 | PASS |
+| 10 | stop-and-wait | 7.6 | 67 | 39.47 | PASS |
+| 10 | Selective Repeat | 23.3 | 69 | 14.20 | PASS |
 
 ### Failure experiment: dynamic SDN vs static baseline
 
 | Controller | Sender | `max_ack_gap_s` (longest stall) | Total time (s) | Verdict |
 |---|---|---:|---:|:--:|
-| Dynamic (`--tag sdn`) | Selective Repeat | _fill_ | _fill_ | PASS |
-| Static (`--tag static`) | Selective Repeat | _fill_ | _fill_ | PASS |
-| Dynamic (`--tag sdn`) | stop-and-wait | _fill_ | _fill_ | PASS |
-| Static (`--tag static`) | stop-and-wait | _fill_ | _fill_ | PASS |
+| Dynamic (`--tag sdn`) | Selective Repeat | 0.40 | 9.1 | PASS |
+| Static (`--tag static`) | Selective Repeat | 5.53 | 14.0 | PASS |
+| Dynamic (`--tag sdn`) | stop-and-wait | 0.52 | 6.4 | PASS |
+| Static (`--tag static`) | stop-and-wait | 3.66 | 7.7 | PASS |
 
 
 ---
